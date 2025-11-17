@@ -63,3 +63,4 @@
 ```bash
 git clone https://github.com/ErfanMh827/find-my-wifi.git
 cd find-my-wifi
+python wifi_connector.py
