@@ -51,37 +51,6 @@ def check_location_services():
     except:
         return False
 
-def get_all_available_networks():
-    typing_animation("📡 Scanning for WiFi networks...", Colors.BLUE)
-    available_networks = []
-    
-    try:
-        result = subprocess.run(['netsh', 'wlan', 'show', 'networks'], 
-                              capture_output=True, text=True, encoding='utf-8', errors='ignore', timeout=15)
-        
-        if result.returncode == 0:
-            for line in result.stdout.split('\n'):
-                line = line.strip()
-                if 'SSID' in line and 'BSSID' not in line and 'Number' not in line:
-                    parts = line.split(':', 1)
-                    if len(parts) > 1:
-                        ssid = parts[1].strip()
-                        if ssid and ssid not in [net['ssid'] for net in available_networks]:
-                            password = get_saved_wifi_password(ssid)
-                            has_password = "Yes" if password and "not found" not in password.lower() else "No"
-                            
-                            network_info = {
-                                'ssid': ssid,
-                                'has_password': has_password,
-                                'password': password if has_password == "Yes" else None
-                            }
-                            available_networks.append(network_info)
-        
-        return available_networks
-        
-    except Exception as e:
-        return []
-
 def get_saved_wifi_password(ssid):
     try:
         command = f'netsh wlan show profile name="{ssid}" key=clear'
@@ -96,6 +65,67 @@ def get_saved_wifi_password(ssid):
         return None
     except:
         return None
+
+def get_all_available_networks():
+    typing_animation("📡 Scanning for WiFi networks...", Colors.BLUE)
+    available_networks = []
+    
+    try:
+        result = subprocess.run(['netsh', 'wlan', 'show', 'networks'], 
+                              capture_output=True, text=True, encoding='utf-8', errors='ignore', timeout=15)
+        
+        if result.returncode == 0:
+            current_ssid = None
+            current_auth = None
+            
+            for line in result.stdout.split('\n'):
+                line = line.strip()
+                
+                # پیدا کردن SSID
+                if 'SSID' in line and 'BSSID' not in line and 'Number' not in line:
+                    parts = line.split(':', 1)
+                    if len(parts) > 1:
+                        current_ssid = parts[1].strip()
+                
+                # پیدا کردن نوع Authentication
+                elif 'Authentication' in line:
+                    parts = line.split(':', 1)
+                    if len(parts) > 1:
+                        current_auth = parts[1].strip()
+                
+                # وقتی به انتهای اطلاعات یک شبکه رسیدیم
+                elif line == '' and current_ssid:
+                    # تشخیص نوع شبکه
+                    is_open_network = False
+                    has_saved_password = False
+                    saved_password = None
+                    
+                    # اگر Authentication Open باشد
+                    if current_auth and 'Open' in current_auth:
+                        is_open_network = True
+                    else:
+                        # چک کردن آیا رمز ذخیره شده داریم
+                        saved_password = get_saved_wifi_password(current_ssid)
+                        has_saved_password = bool(saved_password and "not found" not in saved_password.lower())
+                    
+                    network_info = {
+                        'ssid': current_ssid,
+                        'is_open_network': is_open_network,
+                        'has_saved_password': has_saved_password,
+                        'password': saved_password if has_saved_password else None,
+                        'authentication': current_auth
+                    }
+                    available_networks.append(network_info)
+                    
+                    # ریست کردن برای شبکه بعدی
+                    current_ssid = None
+                    current_auth = None
+        
+        return available_networks
+        
+    except Exception as e:
+        print(f"Error: {e}")
+        return []
 
 def read_passwords_from_files():
     passwords = []
@@ -190,6 +220,19 @@ def fast_connect_to_wifi(ssid, password):
     except:
         return False, None
 
+def connect_to_open_network(ssid):
+    try:
+        # برای شبکه‌های باز نیازی به پروفایل امنیتی نیست
+        connect_result = subprocess.run(['netsh', 'wlan', 'connect', f'name={ssid}'], 
+                                      capture_output=True, timeout=10)
+        
+        if connect_result.returncode == 0:
+            return quick_connection_check(ssid)
+        return False
+        
+    except:
+        return False
+
 def ultra_fast_auto_connect(ssid, password_list):
     typing_animation(f"\n🚀 Ultra-Fast Auto-Connect to: {ssid}", Colors.PURPLE)
     typing_animation(f"📊 Testing {len(password_list):,} passwords...", Colors.BLUE)
@@ -248,9 +291,18 @@ def main():
     
     typing_animation(f"\n📶 Found {len(networks)} networks:", Colors.BLUE)
     typing_animation("-" * 40, Colors.CYAN)
+    
     for i, net in enumerate(networks, 1):
-        status = "🔐" if net['has_password'] == "Yes" else "🔓"
-        color = Colors.GREEN if net['has_password'] == "Yes" else Colors.YELLOW
+        if net['is_open_network']:
+            status = "🔓 OPEN"
+            color = Colors.GREEN
+        elif net['has_saved_password']:
+            status = "🔐 SAVED"
+            color = Colors.YELLOW
+        else:
+            status = "🔒 LOCKED"
+            color = Colors.RED
+        
         typing_animation(f"{i}. {net['ssid']} {status}", color)
     
     typing_animation("-" * 40, Colors.CYAN)
@@ -268,7 +320,16 @@ def main():
         if selected:
             typing_animation(f"\n🔌 Connecting to: {selected['ssid']}", Colors.BLUE)
             
-            if selected['has_password'] == "Yes":
+            if selected['is_open_network']:
+                # وای‌فای بدون رمز
+                typing_animation("🔓 Open network - No password needed", Colors.GREEN)
+                if connect_to_open_network(selected['ssid']):
+                    typing_animation("✅ Connected!", Colors.GREEN)
+                else:
+                    typing_animation("❌ Failed to connect!", Colors.RED)
+                    
+            elif selected['has_saved_password']:
+                # وای‌فای با رمز ذخیره شده
                 typing_animation(f"🔑 Using saved password", Colors.YELLOW)
                 success, used_password = fast_connect_to_wifi(selected['ssid'], selected['password'])
                 if success:
@@ -276,7 +337,8 @@ def main():
                 else:
                     typing_animation("❌ Failed!", Colors.RED)
             else:
-                typing_animation("🔓 No saved password", Colors.YELLOW)
+                # وای‌فای با رمز اما بدون پسورد ذخیره شده
+                typing_animation("🔒 Locked network - Need password", Colors.RED)
                 mode = input(Colors.WHITE + "Auto (a) or Manual (m): " + Colors.END).lower()
                 
                 if mode in ['a', 'auto']:
