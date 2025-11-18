@@ -61,6 +61,7 @@
 
 #### ۱. کلون کردن ریپازیتوری
 ```bash
+You need requests and git
 git clone https://github.com/ErfanMh827/find-my-wifi.git
 cd find-my-wifi
-python wifi_connector.py
+python run.py
